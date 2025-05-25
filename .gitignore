@@ -3,6 +3,9 @@ venv/
 env/
 hotel_booking_env/
 
+#secrets
+.env
+
 # PyCharm
 .idea/
 

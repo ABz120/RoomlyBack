@@ -1,5 +1,9 @@
 from fastapi import FastAPI
 from routes import users, business
+from database import Base, engine
+
+# Создание таблиц при запуске
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
