@@ -1,0 +1,17 @@
+# Виртуальное окружение
+venv/
+env/
+hotel_booking_env/
+
+# PyCharm
+.idea/
+
+# Кэш Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Логи и временные файлы
+*.log
+*.pid
