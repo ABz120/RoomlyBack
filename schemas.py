@@ -16,3 +16,19 @@ class UserResponse(UserBase):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
+class HotelBase(BaseModel):
+    name: str
+    address: str
+    description: str | None = None  # Опциональное поле
+    rating: float | None = None    # Опциональное поле
+
+class HotelCreate(HotelBase):
+    pass
+
+class HotelResponse(HotelBase):
+    id: int
+    owner_id: int
+
+    class Config:
+        from_attributes = True
