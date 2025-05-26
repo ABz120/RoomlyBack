@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from schemas import UserCreate, UserResponse, UserLogin
 from models import User
 from database import get_db
@@ -13,8 +14,9 @@ class UserLogin(BaseModel):
     password: str
 
 @router.post("/register", response_model=UserResponse)
-def create_user(user: UserCreate, db: Session = Depends(get_db)):
-    db_user = db.query(User).filter(User.email == user.email).first()
+async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).filter(User.email == user.email))
+    db_user = result.scalar_one_or_none()
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     if user.role not in ["regular", "business"]:
@@ -22,20 +24,27 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     hashed_password = hash_password(user.password)
     new_user = User(email=user.email, hashed_password=hashed_password, role=user.role)
     db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    await db.commit()
+    await db.refresh(new_user)
     return new_user
 
 @router.post("/login")
-def login(user: UserLogin, db: Session = Depends(get_db)):
-    db_user = db.query(User).filter(User.email == user.email).first()
-    if not db_user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    if not verify_password(user.password, db_user.hashed_password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    access_token = create_access_token(data={"sub": db_user.email})
-    return {"access_token": access_token, "token_type": "bearer"}
+async def login(user: UserLogin):
+    db_gen = get_db()
+    db = await anext(db_gen)
+    try:
+        result = await db.execute(select(User).filter(User.email == user.email))
+        db_user = result.scalar_one_or_none()
+        if not db_user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+        if not verify_password(user.password, db_user.hashed_password):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+        access_token = create_access_token(data={"sub": db_user.email})
+        return {"access_token": access_token, "token_type": "bearer"}
+    finally:
+        await db_gen.aclose()
+
 
 @router.get("/me", response_model=UserResponse)
-def read_users_me(current_user: User = Depends(get_current_user)):
+async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
