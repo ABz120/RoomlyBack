@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from routes import users, hotels
+from routes import users, hotels, favorites
 from database import Base, engine, get_db_session
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from models import RoomOffer
@@ -34,6 +34,7 @@ app = FastAPI(lifespan=lifespan)
 
 app.include_router(users.router, prefix="/api/users")
 app.include_router(hotels.router, prefix="/api/hotels")
+app.include_router(favorites.router, prefix="/api/favorites")
 
 @app.get("/")
 async def read_root():

@@ -1,10 +1,8 @@
-# database.py
-
 import os
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
-from contextlib import asynccontextmanager
+from typing import AsyncGenerator
 
 # Загружаем переменные окружения из .env
 load_dotenv()
@@ -23,9 +21,8 @@ AsyncSessionLocal = async_sessionmaker(
     expire_on_commit=False
 )
 
-# Асинхронный контекстный менеджер — удобно использовать в FastAPI Depends
-@asynccontextmanager
-async def get_db():
+# Асинхронный генератор для работы с сессией в FastAPI Depends
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         yield session
 

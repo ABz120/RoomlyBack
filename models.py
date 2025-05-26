@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Float, DateTime
+from sqlalchemy import Column, Integer, String, ForeignKey, Float, DateTime, UniqueConstraint
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime, UTC
@@ -10,6 +10,7 @@ class User(Base):
     hashed_password = Column(String)
     role = Column(String)  # "regular" или "business"
     hotels = relationship("Hotel", back_populates="owner")
+    favorites = relationship("Favorite", back_populates="user", cascade="all, delete-orphan")
 
 class Hotel(Base):
     __tablename__ = "hotels"
@@ -44,3 +45,14 @@ class RoomOffer(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))  # Время создания предложения
     available = Column(Integer, default=1)         # Количество доступных предложений
     room = relationship("Room", back_populates="offers")
+
+class Favorite(Base):
+    __tablename__ = "favorites"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    room_id = Column(Integer, ForeignKey("rooms.id"), nullable=False)
+
+    __table_args__ = (UniqueConstraint("user_id", "room_id", name="user_room_unique"),)
+
+    user = relationship("User", back_populates="favorites")
+    room = relationship("Room")

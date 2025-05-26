@@ -81,9 +81,9 @@ def calculate_dynamic_price(offer: RoomOffer) -> float:
 
 @router.post("/rooms/offers/{offer_id}/book")
 async def book_offer(
-        offer_id: int,
-        db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+    offer_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     try:
         result = await db.execute(
@@ -105,6 +105,9 @@ async def book_offer(
             "user_id": current_user.id,
             "booked_price": round(current_price, 2)
         }
+
+    except HTTPException:
+        raise  # не трогаем HTTP-ошибки
 
     except Exception as e:
         await db.rollback()
