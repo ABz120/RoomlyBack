@@ -1,15 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from schemas import HotelCreate, HotelResponse, RoomCreate, RoomResponse, RoomOfferCreate, RoomOfferResponse
 from models import Hotel, User, Room, RoomOffer
 from database import get_db
 from utils import get_current_user
 import asyncio
+from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timezone
 import math
 import random
-
 
 router = APIRouter()
 
@@ -65,7 +64,6 @@ async def get_room_offers(db: AsyncSession = Depends(get_db), current_user: User
     return offers
 
 
-
 def calculate_dynamic_price(offer: RoomOffer) -> float:
     created_at = offer.created_at
     if created_at.tzinfo is None:
@@ -78,12 +76,11 @@ def calculate_dynamic_price(offer: RoomOffer) -> float:
     return max(price, offer.min_price)
 
 
-
 @router.post("/rooms/offers/{offer_id}/book")
 async def book_offer(
-    offer_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+        offer_id: int,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
     try:
         result = await db.execute(
@@ -115,22 +112,52 @@ async def book_offer(
 
 
 @router.websocket("/rooms/offers/{offer_id}")
-async def websocket_price(websocket: WebSocket, offer_id: int):
+async def websocket_price(websocket: WebSocket, offer_id: int, db: AsyncSession = Depends(get_db)):
     await websocket.accept()
     try:
+        # Фиксация просмотра при подключении
+        await record_offer_view(offer_id, db)
         while True:
-            async with get_db() as session:
-                result = await session.execute(select(RoomOffer).filter(RoomOffer.id == offer_id))
-                offer = result.scalar_one_or_none()
-                if not offer:
-                    await websocket.send_json({"error": "Offer not found"})
-                    break
-                current_price = calculate_dynamic_price(offer)
-                # НЕ сохраняем current_price в базу, а просто отправляем клиенту
-                await websocket.send_json({"offer_id": offer_id, "current_price": round(current_price, 2)})
+            result = await db.execute(select(RoomOffer).filter(RoomOffer.id == offer_id))
+            offer = result.scalar_one_or_none()
+            if not offer:
+                await websocket.send_json({"error": "Offer not found"})
+                break
+            current_price = calculate_dynamic_price(offer)
+            await websocket.send_json({"offer_id": offer_id, "current_price": round(current_price, 2)})
             await asyncio.sleep(1)
     except WebSocketDisconnect:
         pass
     except Exception as e:
         await websocket.close(code=1000, reason=str(e))
 
+
+async def record_offer_view(offer_id: int, db: AsyncSession):
+    await db.execute(
+        """
+        INSERT INTO offer_views (offer_id, timestamp)
+        VALUES (:offer_id, :timestamp)
+        """,
+        {"offer_id": offer_id, "timestamp": datetime.now(timezone.utc)}
+    )
+    await db.commit()
+
+
+@router.post("/rooms/offers/{offer_id}/view", status_code=200)
+async def record_offer_view(offer_id: int, db: AsyncSession = Depends(get_db)):
+    # Проверяем существование предложения
+    result = await db.execute(select(RoomOffer).filter(RoomOffer.id == offer_id))
+    offer = result.scalar_one_or_none()
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found")
+
+    # Фиксация просмотра
+    await db.execute(
+        """
+        INSERT INTO offer_views (offer_id, timestamp)
+        VALUES (:offer_id, :timestamp)
+        """,
+        {"offer_id": offer_id, "timestamp": datetime.now(timezone.utc)}
+    )
+    await db.commit()
+    return {"detail": "View recorded", "offer_id": offer_id}
