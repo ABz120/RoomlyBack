@@ -10,3 +10,4 @@ python-jose==3.4.0
 typing-extensions==4.13.2
 email-validator==2.2.0
 asyncpg==0.30.0
+websockets

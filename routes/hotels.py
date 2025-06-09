@@ -9,6 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timezone
 import math
 import random
+from sqlalchemy.sql import text
+from contextlib import asynccontextmanager
+import zoneinfo
 
 router = APIRouter()
 
@@ -111,12 +114,30 @@ async def book_offer(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.websocket("/rooms/offers/{offer_id}")
+
+
+@router.websocket("/ws/rooms/offers/{offer_id}")
 async def websocket_price(websocket: WebSocket, offer_id: int, db: AsyncSession = Depends(get_db)):
     await websocket.accept()
     try:
-        # Фиксация просмотра при подключении
-        await record_offer_view(offer_id, db)
+        # Проверка существования предложения
+        result = await db.execute(select(RoomOffer).filter(RoomOffer.id == offer_id))
+        offer = result.scalar_one_or_none()
+        if not offer:
+            await websocket.send_json({"error": "Offer not found"})
+            await websocket.close()
+            return
+
+        # Фиксация просмотра
+        await db.execute(
+            text("""
+            INSERT INTO offer_views (offer_id, timestamp)
+            VALUES (:offer_id, :timestamp)
+            """),
+            {"offer_id": offer_id, "timestamp": datetime.now(zoneinfo.ZoneInfo("UTC"))}
+        )
+        await db.commit()
+
         while True:
             result = await db.execute(select(RoomOffer).filter(RoomOffer.id == offer_id))
             offer = result.scalar_one_or_none()
@@ -124,23 +145,16 @@ async def websocket_price(websocket: WebSocket, offer_id: int, db: AsyncSession 
                 await websocket.send_json({"error": "Offer not found"})
                 break
             current_price = calculate_dynamic_price(offer)
-            await websocket.send_json({"offer_id": offer_id, "current_price": round(current_price, 2)})
+            await websocket.send_json({
+                "offer_id": offer_id,
+                "current_price": round(current_price, 2),
+                "popularity_factor": offer.popularity_factor  # Добавляем популярность
+            })
             await asyncio.sleep(1)
     except WebSocketDisconnect:
         pass
     except Exception as e:
         await websocket.close(code=1000, reason=str(e))
-
-
-async def record_offer_view(offer_id: int, db: AsyncSession):
-    await db.execute(
-        """
-        INSERT INTO offer_views (offer_id, timestamp)
-        VALUES (:offer_id, :timestamp)
-        """,
-        {"offer_id": offer_id, "timestamp": datetime.now(timezone.utc)}
-    )
-    await db.commit()
 
 
 @router.post("/rooms/offers/{offer_id}/view", status_code=200)
@@ -153,11 +167,11 @@ async def record_offer_view(offer_id: int, db: AsyncSession = Depends(get_db)):
 
     # Фиксация просмотра
     await db.execute(
-        """
+        text("""
         INSERT INTO offer_views (offer_id, timestamp)
         VALUES (:offer_id, :timestamp)
-        """,
-        {"offer_id": offer_id, "timestamp": datetime.now(timezone.utc)}
+        """),
+        {"offer_id": offer_id, "timestamp": datetime.now(zoneinfo.ZoneInfo("UTC"))}
     )
     await db.commit()
     return {"detail": "View recorded", "offer_id": offer_id}
