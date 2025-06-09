@@ -21,15 +21,18 @@ AsyncSessionLocal = async_sessionmaker(
     expire_on_commit=False
 )
 
+
 # Асинхронный генератор для работы с сессией в FastAPI Depends
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         yield session
 
-# Удобная функция для получения сессии вручную (например, в фоновом таске)
+
+# Удобная функция для получения сессии вручную
 async def get_db_session() -> AsyncSession:
     async with AsyncSessionLocal() as session:
         return session
+
 
 # Базовый класс моделей
 Base = declarative_base()

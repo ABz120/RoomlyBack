@@ -7,8 +7,10 @@ from utils import get_current_user
 
 router = APIRouter()
 
-@router.post("/favorites/{room_id}", status_code=201)
-async def add_favorite(room_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+
+@router.post("/{room_id}", status_code=201)
+async def add_favorite(room_id: int, db: AsyncSession = Depends(get_db),
+                       current_user: User = Depends(get_current_user)):
     # Проверяем, существует ли номер
     result = await db.execute(select(Room).filter(Room.id == room_id))
     room = result.scalar_one_or_none()
@@ -28,8 +30,10 @@ async def add_favorite(room_id: int, db: AsyncSession = Depends(get_db), current
     await db.commit()
     return {"detail": "Room added to favorites"}
 
-@router.delete("/favorites/{room_id}", status_code=204)
-async def remove_favorite(room_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+
+@router.delete("/{room_id}", status_code=204)
+async def remove_favorite(room_id: int, db: AsyncSession = Depends(get_db),
+                          current_user: User = Depends(get_current_user)):
     result = await db.execute(
         select(Favorite).filter(Favorite.user_id == current_user.id, Favorite.room_id == room_id)
     )
@@ -41,7 +45,8 @@ async def remove_favorite(room_id: int, db: AsyncSession = Depends(get_db), curr
     await db.commit()
     return
 
-@router.get("/favorites/", response_model=list[int])  # или список моделей RoomResponse, если хочешь детали
+
+@router.get("/", response_model=list[int])  # или список моделей RoomResponse, если хочешь детали
 async def get_favorites(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = await db.execute(
         select(Favorite).filter(Favorite.user_id == current_user.id)

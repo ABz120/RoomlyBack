@@ -18,3 +18,5 @@ __pycache__/
 # Логи и временные файлы
 *.log
 *.pid
+celerybeat-schedule
+celerybeat-schedule.*
